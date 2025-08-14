@@ -31,4 +31,19 @@ self.addEventListener('notificationclick', (event) => {
     }
   })());
 });
+// Push受信で通知を表示
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  let payload = {};
+  try { payload = event.data.json(); }
+  catch { payload = { title: 'お知らせ', body: event.data.text() }; }
+
+  const title = payload.title || 'お知らせ';
+  const body  = payload.body  || '';
+  const icon  = payload.icon  || '/icon-192.png';
+  const badge = payload.badge || '/icon-192.png';
+  const tag   = payload.tag   || 'classparty';
+
+  event.waitUntil(self.registration.showNotification(title, { body, icon, badge, tag }));
+});
 
