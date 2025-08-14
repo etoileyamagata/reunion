@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>蔵中2002 Reunion カレンダー</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#1E40AF" />
+  <style>
+    /* -------- ベース -------- */
+    :root {
+      --brand:#1E40AF;
+      --brand-ghost:#e0e7ff;
+      --text:#111;
+      --muted:#666;
+      --card-bg: rgba(255,255,255,0.9);
+      --card-border:#dfe3f5;
+    }
+    html,body { height:100%; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+      margin: 0; background: #0f172a; color: var(--text);
+    }
+    /* 背景Canvas */
+    #bgCanvas {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: -1;
+    }
+
+    header {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--brand);
+      color: #fff;
+      padding: 14px 16px;
+      backdrop-filter: blur(2px);
+    }
+    header h1 { margin:0; font-size: 20px; }
+    .topbar { display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+    .right { display:flex; gap:8px; align-items:center; }
+
+    main { padding:16px; max-width:900px; margin:0 auto; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .row > * { flex:1 1 240px; }
+    label { display:block; font-size:12px; color:#444; margin-bottom:6px; }
+    input, select, textarea {
+      width:100%; box-sizing:border-box; padding:12px;
+      border:1px solid #d1d5db; border-radius:10px; background:#fff;
+    }
+    button { cursor:pointer; border:none; border-radius:10px; padding:12px 14px; }
+    .btn-primary { background: var(--brand); color:#fff; }
+    .btn-ghost { background: var(--brand-ghost); color: var(--brand); }
+    .danger { background:#fee2e2; color:#b91c1c; }
+    .muted { color:var(--muted); font-size:12px; }
+
+    .pill {
+      display:inline-block; padding:4px 8px; border-radius:999px;
+      background: var(--brand-ghost); color: var(--brand); font-size:12px;
+    }
+
+    .events { display:grid; grid-template-columns:1fr; gap:10px; }
+    .event {
+      border:1px solid #e5e7eb; border-radius:12px; padding:12px;
+      background: rgba(255,255,255,0.85); backdrop-filter: blur(2px);
+    }
+    .event h3 { margin:0 0 6px; font-size:16px; }
+    .event .meta { font-size:12px; color:#555; margin:6px 0; }
+
+    footer { padding:24px; text-align:center; color:#bbb; font-size:12px; }
+
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+    /* -------- モーダル -------- */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,0.45);
+      display: none; align-items: center; justify-content: center;
+      padding: 16px; z-index: 50;
+    }
+    .modal-overlay.show { display:flex; }
+    .modal {
+      width:100%; max-width:520px; border-radius:16px;
+      background: rgba(255,255,255,0.98);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden;
+    }
+    .modal-header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 14px; background: var(--brand); color:#fff;
+    }
+    .modal-title { font-weight:600; }
+    .modal-close { background: rgba(255,255,255,0.2); color:#fff; border:none; border-radius:10px; padding:6px 10px; }
+    .modal-body { padding:14px; }
+    .form-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .form-col { display:flex; flex-direction:column; gap:6px; }
+    .modal-actions { display:grid; grid-template-columns:1fr; gap:8px; margin-top:10px; }
+    .modal-wide { width:100%; padding:12px 14px; }
+    .tiny { font-size:11px; }
+
+    /* -------- カレンダー -------- */
+    .hidden { display:none !important; }
+    .view-toggle { display:flex; gap:6px; }
+    .view-toggle .active { background: var(--brand); color:#fff; }
+
+    .month { margin-top:10px; }
+    .month-header { display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:8px; }
+    .month-label { font-weight:600; }
+    .weekdays {
+      display:grid; grid-template-columns: repeat(7, 1fr);
+      text-align:center; color:#666; font-size:12px; margin-bottom:6px;
+    }
+    .weekdays > div { padding:6px 0; }
+    .month-grid {
+      display:grid; grid-template-columns: repeat(7, 1fr);
+      grid-auto-rows: minmax(74px, auto); gap:6px;
+    }
+    .day-cell {
+      background: rgba(255,255,255,0.9); border:1px solid #e5e7eb;
+      border-radius:12px; padding:6px; display:flex; flex-direction:column; gap:6px;
+    }
+    .day-head {
+      display:flex; align-items:center; justify-content:space-between;
+      font-size:12px; color:#444;
+    }
+    .day-head .today { background: var(--brand); color:#fff; border-radius:999px; padding:0 6px; font-size:11px; }
+    .day-events { display:flex; flex-direction:column; gap:4px; }
+    .day-event {
+      font-size:12px; line-height:1.2;
+      background: var(--brand-ghost); color: var(--brand);
+      border-radius:8px; padding:4px 6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      cursor: pointer;
+    }
+
+    /* -------- FAB（スマホ左下の＋） -------- */
+    .fab-add {
+      position: fixed;
+      left: max(16px, env(safe-area-inset-left, 16px));
+      bottom: max(16px, env(safe-area-inset-bottom, 16px));
+      z-index: 60;
+      width:56px; height:56px; border-radius:999px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:22px; line-height:1;
+      background: var(--brand); color:#fff; box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+      border:none;
+    }
+    .fab-add:active { transform: translateY(1px); }
+
+    /* -------- スマホ最適化 -------- */
+    @media (max-width: 700px){
+      main { padding: 12px; }
+      .card { padding: 12px; }
+      input, select, textarea { min-height: 44px; font-size: clamp(14px, 4vw, 16px); }
+      .form-row-2 { grid-template-columns: 1fr; }
+      .event h3 { font-size: 15px; }
+      .event .meta { font-size: 12px; }
+
+      /* スマホではヘッダーの「＋追加」を隠し、FABを表示 */
+      #addOpenBtn { display: none; }
+      #fabAdd { display: flex; }
+      .month-grid { grid-auto-rows: minmax(64px, auto); gap:4px; }
+      .day-event { font-size:11px; }
+    }
+
+    /* デスクトップではFABを隠し、ヘッダー「＋追加」を使う */
+    @media (min-width: 701px){
+      #fabAdd { display: none; }
+    }
+
+    /* ヘッダーボタンのタップ領域 */
+    header .right button { min-height: 44px; }
+  </style>
+</head>
+<body>
+  <canvas id="bgCanvas" aria-hidden="true"></canvas>
+
+  <header>
+    <div class="topbar">
+      <h1>蔵中2002 Reunion カレンダー</h1>
+      <div class="right">
+        <button id="addOpenBtn" class="btn-primary" aria-label="新規予定を追加">＋ 追加</button>
+        <button id="shareLinkBtn" class="btn-ghost">共有リンクをコピー</button>
+        <button id="installBtn" class="btn-ghost">ホーム画面に追加</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- グループ＆PIN -->
+    <div class="card">
+      <div class="row">
+        <div>
+          <div class="muted">グループ</div>
+          <div id="groupIdLabel" class="pill">default</div>
+        </div>
+        <div>
+          <label>編集PIN（4桁の数字）</label>
+          <input id="adminPin" type="password" placeholder="編集用PIN (4桁)" inputmode="numeric" maxlength="4" pattern="\d{4}" />
+        </div>
+      </div>
+      <div class="muted" style="margin-top:8px;">
+        閲覧はURLを知る人全員、作成/編集/削除は4桁の編集PINが必要です。
+      </div>
+    </div>
+
+    <!-- モーダル：イベント作成（スマホ縦1列） -->
+    <div id="modalOverlay" class="modal-overlay" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-header">
+          <div id="modalTitle" class="modal-title">イベント作成</div>
+          <button id="addCloseBtn" class="modal-close" aria-label="閉じる">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-col">
+            <label>場所</label>
+            <input id="place" placeholder="店名・住所など" />
+          </div>
+          <div class="form-row-2">
+            <div class="form-col">
+              <label>開始日時</label>
+              <input id="startAt" type="datetime-local" />
+            </div>
+            <div class="form-col">
+              <label>終了時刻（同日）</label>
+              <input id="endAtTime" type="time" />
+            </div>
+          </div>
+          <div class="form-col">
+            <label>参加者（カンマ区切り）</label>
+            <input id="participants" placeholder="例：田中, 佐藤, 鈴木" />
+          </div>
+          <div class="form-col">
+            <label>代表連絡先</label>
+            <input id="contact" placeholder="電話番号やLINE IDなど" />
+          </div>
+          <div class="form-col">
+            <label>飛び入り可</label>
+            <select id="walkins">
+              <option value="same-gender">同性のみ可</option>
+              <option value="anyone">誰でも可</option>
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button id="createBtn" class="btn-primary modal-wide">登録する</button>
+            <button id="clearFormBtn" class="btn-ghost modal-wide">入力をクリア</button>
+          </div>
+          <div class="muted tiny">作成/編集/削除には4桁の編集PINが必要です。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 予定（一覧／カレンダー切替） -->
+    <div class="card">
+      <div class="topbar">
+        <h2 style="margin:0;">予定</h2>
+        <div class="right">
+          <div class="view-toggle">
+            <button id="listViewBtn" class="btn-ghost">一覧</button>
+            <button id="monthViewBtn" class="btn-ghost">カレンダー</button>
+          </div>
+          <button id="purgeBtn" class="danger">この端末のローカル予定を全消去</button>
+        </div>
+      </div>
+
+      <!-- 一覧ビュー -->
+      <div id="listView" class="events"></div>
+
+      <!-- カレンダー（月）ビュー -->
+      <div id="monthView" class="month hidden">
+        <div class="month-header">
+          <button id="prevMonthBtn" class="btn-ghost" aria-label="前の月">◀</button>
+          <div id="monthLabel" class="month-label"></div>
+          <button id="nextMonthBtn" class="btn-ghost" aria-label="次の月">▶</button>
+        </div>
+        <div class="weekdays">
+          <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
+        </div>
+        <div id="monthGrid" class="month-grid"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer>v0.2 PWA / ローカル保存版（のちほどクラウド同期に差し替え可能）</footer>
+
+  <!-- スマホ左下のフローティング＋ボタン -->
+  <button id="fabAdd" class="fab-add" aria-label="新規予定を追加">＋</button>
+
+  <script>
+    /* ===== PWA install handling ===== */
+    let deferredPrompt = null;
+    const installBtn = document.getElementById('installBtn');
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.style.display = 'inline-block';
+    });
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBtn.style.display = 'none';
+    });
+
+    /* ===== Group & Storage ===== */
+    const params = new URLSearchParams(location.search);
+    const groupId = params.get('group') || 'default';
+    const groupLabel = document.getElementById('groupIdLabel');
+    groupLabel.textContent = groupId;
+
+    const STORAGE_KEY = 'classparty.events';
+    const DEVICE_KEY = 'classparty.device';
+    const ADMIN_PIN_KEY = 'classparty.adminPin';
+
+    function deviceId() {
+      let id = localStorage.getItem(DEVICE_KEY);
+      if (!id) {
+        id = 'dev_' + Math.random().toString(36).slice(2,10);
+        localStorage.setItem(DEVICE_KEY, id);
+      }
+      return id;
+    }
+    function loadAll() {
+      try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; }
+      catch(e){ return []; }
+    }
+    function saveAll(list) { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
+    function loadByGroup(gid) { return loadAll().filter(ev => ev.groupId === gid); }
+
+    /* ===== Admin PIN ===== */
+    const adminPinInput = document.getElementById('adminPin');
+    adminPinInput.value = localStorage.getItem(ADMIN_PIN_KEY) || '';
+    function canEdit() {
+      const pin = adminPinInput.value.trim();
+      return /^\d{4}$/.test(pin); // 4桁の数字のみ
+    }
+    adminPinInput.addEventListener('input', () => {
+      localStorage.setItem(ADMIN_PIN_KEY, adminPinInput.value.trim());
+      render();
+    });
+
+    /* ===== Util ===== */
+    const $ = id => document.getElementById(id);
+    function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+    function timefmt(v){
+      if(!v) return '-';
+      const d = new Date(v); if(isNaN(d)) return v;
+      const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+      const hh=String(d.getHours()).padStart(2,'0'), mm=String(d.getMinutes()).padStart(2,'0');
+      return `${y}/${m}/${day} ${hh}:${mm}`;
+    }
+
+    /* ===== モーダル制御 ===== */
+    const modal = $('modalOverlay');
+    const addOpenBtn = $('addOpenBtn');   // ヘッダー用
+    const fabAdd = $('fabAdd');           // スマホ左下FAB
+    const addCloseBtn = $('addCloseBtn');
+
+    function openModal() {
+      modal.classList.add('show');
+      setTimeout(() => { $('place')?.focus(); }, 50);
+    }
+    function closeModal() { modal.classList.remove('show'); }
+
+    addOpenBtn?.addEventListener('click', openModal);
+    fabAdd?.addEventListener('click', openModal);
+    addCloseBtn?.addEventListener('click', closeModal);
+    modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    /* ===== 通知 ===== */
+    async function ensureNotifyPermission() {
+      if (!('Notification' in window)) return false;
+      if (Notification.permission === 'granted') return true;
+      if (Notification.permission === 'denied') return false;
+      const p = await Notification.requestPermission();
+      return p === 'granted';
+    }
+    async function notifyLocal(title, body) {
+      const ok = await ensureNotifyPermission(); if (!ok) return;
+      try {
+        new Notification(title, { body, icon: '/icon-192.png', badge: '/icon-192.png' });
+        if (navigator.vibrate) navigator.vibrate(30);
+      } catch(e) {}
+    }
+
+    /* ===== フォーム ===== */
+    const createBtn = $('createBtn');
+    const clearFormBtn = $('clearFormBtn');
+
+    function readForm() {
+      const startVal = $('startAt').value;
+      const endTimeOnly = $('endAtTime').value; // "18:30" など
+      let endVal = '';
+      if (startVal && endTimeOnly) {
+        const d = new Date(startVal);
+        const [hh, mm] = endTimeOnly.split(':').map(Number);
+        d.setHours(hh || 0, mm || 0, 0, 0);
+        const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+        const H=String(d.getHours()).padStart(2,'0'), M=String(d.getMinutes()).padStart(2,'0');
+        endVal = `${y}-${m}-${day}T${H}:${M}`;
+      }
+      return {
+        id: 'ev_' + Math.random().toString(36).slice(2,10),
+        groupId: groupId,
+        title: '',
+        place: $('place').value.trim(),
+        startAt: startVal,
+        endAt: endVal,
+        participants: $('participants').value.trim(),
+        contact: $('contact').value.trim(),
+        walkins: $('walkins').value,
+        createdByDeviceId: deviceId(),
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    function clearForm() {
+      ['place','startAt','participants','contact'].forEach(id => { $(id).value=''; });
+      const et = $('endAtTime'); if (et) et.value = '';
+      $('walkins').value='same-gender';
+    }
+
+    createBtn.addEventListener('click', async () => {
+      if (!canEdit()) { alert('編集PIN（4桁の数字）を入力してください'); return; }
+      const ev = readForm();
+      if (!ev.startAt || !$('endAtTime').value || !ev.place) { alert('開始日時／終了時刻／場所は必須です'); return; }
+      if (new Date(ev.endAt).getTime() < new Date(ev.startAt).getTime()) { alert('終了時刻は開始より後の時刻を指定してください（同日内）'); return; }
+      const list = loadAll(); list.push(ev); saveAll(list);
+      await notifyLocal('予定を登録しました', `${ev.place}｜${timefmt(ev.startAt)}〜${timefmt(ev.endAt)}`);
+      closeModal(); clearForm(); render();
+    });
+
+    clearFormBtn.addEventListener('click', clearForm);
+
+    /* ===== ビュー切替 & 月管理 ===== */
+    let viewMode = localStorage.getItem('classparty.viewMode') || 'list'; // 'list' | 'month'
+    let currentMonth = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; })();
+
+    function setView(mode) {
+      viewMode = mode;
+      localStorage.setItem('classparty.viewMode', mode);
+      $('listView').classList.toggle('hidden', mode !== 'list');
+      $('monthView').classList.toggle('hidden', mode !== 'month');
+      $('listViewBtn').classList.toggle('active', mode === 'list');
+      $('monthViewBtn').classList.toggle('active', mode === 'month');
+      render();
+    }
+    function monthDiff(d, months) {
+      const x = new Date(d); x.setMonth(x.getMonth()+months); x.setDate(1); x.setHours(0,0,0,0); return x;
+    }
+    function yyyymmdd(d) {
+      const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function renderList() {
+      const container = $('listView');
+      const list = groupId ? loadByGroup(groupId) : [];
+      list.sort((a,b)=> (a.startAt||'').localeCompare(b.startAt||''));
+      container.innerHTML = '';
+      if (list.length === 0) { container.innerHTML = '<div class="muted">このグループの予定はまだありません。</div>'; return; }
+      const editable = canEdit();
+
+      for (const ev of list) {
+        const el = document.createElement('div');
+        el.className = 'event';
+        el.innerHTML = `
+          <h3>${ev.title ? escapeHtml(ev.title) : '（無題）'}</h3>
+          <div class="meta">⏱ ${timefmt(ev.startAt)} 〜 ${timefmt(ev.endAt)}</div>
+          <div class="meta">📍 ${escapeHtml(ev.place)}</div>
+          <div class="meta">👥 参加者：${escapeHtml(ev.participants || '未入力')}</div>
+          <div class="meta">☎ 代表連絡：${escapeHtml(ev.contact || '未入力')}</div>
+          <div class="meta">🪩 飛び入り：<span class="pill">${ev.walkins === 'anyone' ? '誰でも可' : '同性のみ可'}</span></div>
+          <div class="meta muted">ID: ${ev.id}</div>
+          <div style="margin-top:8px; display:flex; gap:8px;">
+            ${editable ? `<button data-act="edit" data-id="${ev.id}" class="btn-ghost">編集</button>
+                          <button data-act="del" data-id="${ev.id}" class="danger">削除</button>` : ''}
+          </div>
+        `;
+        el.addEventListener('click', (e) => {
+          const act = e.target.getAttribute('data-act');
+          const id = e.target.getAttribute('data-id');
+          if (!act || !id) return;
+          if (!canEdit()) { alert('編集PINが必要です'); return; }
+
+          if (act === 'del') {
+            const all = loadAll().filter(x => x.id !== id);
+            saveAll(all); render();
+          }
+          if (act === 'edit') {
+            const all = loadAll(); const idx = all.findIndex(x => x.id === id);
+            if (idx < 0) return; const cur = all[idx];
+
+            $('place').value = cur.place || '';
+            $('startAt').value = cur.startAt || '';
+            (function setEndTimeOnly(){
+              const et = $('endAtTime');
+              if (et) {
+                if (cur.endAt) {
+                  const d = new Date(cur.endAt);
+                  const hh = String(d.getHours()).padStart(2,'0');
+                  const mm = String(d.getMinutes()).padStart(2,'0');
+                  et.value = `${hh}:${mm}`;
+                } else et.value = '';
+              }
+            })();
+            $('participants').value = cur.participants || '';
+            $('contact').value = cur.contact || '';
+            $('walkins').value = cur.walkins || 'same-gender';
+
+            openModal();
+
+            createBtn.onclick = () => {
+              if (!canEdit()) { alert('編集PINが必要です'); return; }
+              const startVal = $('startAt').value;
+              const endTimeOnly = $('endAtTime').value;
+              let endVal = cur.endAt;
+              if (startVal && endTimeOnly) {
+                const d = new Date(startVal);
+                const [hh, mm] = endTimeOnly.split(':').map(Number);
+                d.setHours(hh || 0, mm || 0, 0, 0);
+                const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+                const H=String(d.getHours()).padStart(2,'0'), M=String(d.getMinutes()).padStart(2,'0');
+                endVal = `${y}-${m}-${day}T${H}:${M}`;
+              }
+
+              cur.title = '';
+              cur.place = $('place').value.trim();
+              cur.startAt = startVal;
+              cur.endAt = endVal;
+              cur.participants = $('participants').value.trim();
+              cur.contact = $('contact').value.trim();
+              cur.walkins = $('walkins').value;
+
+              if (!cur.startAt || !endTimeOnly || !cur.place) { alert('開始日時／終了時刻／場所は必須です'); return; }
+              if (new Date(cur.endAt).getTime() < new Date(cur.startAt).getTime()) { alert('終了時刻は開始より後の時刻を指定してください（同日内）'); return; }
+
+              all[idx] = cur; saveAll(all);
+              createBtn.onclick = defaultCreateHandler;
+              clearForm(); closeModal(); render();
+            };
+          }
+        });
+        container.appendChild(el);
+      }
+    }
+
+    function renderMonth() {
+      const monthLabel = $('monthLabel');
+      const grid = $('monthGrid');
+      const y = currentMonth.getFullYear();
+      const m = currentMonth.getMonth();
+
+      monthLabel.textContent = `${y}年 ${m+1}月`;
+
+      const firstDay = new Date(y, m, 1);
+      const startOffset = firstDay.getDay();
+      const start = new Date(y, m, 1 - startOffset);
+      start.setHours(0,0,0,0);
+
+      const cells = [];
+      for (let i=0; i<42; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        d.setHours(0,0,0,0);
+        cells.push(d);
+      }
+
+      const events = groupId ? loadByGroup(groupId) : [];
+      const byDate = new Map();
+      for (const ev of events) {
+        if (!ev.startAt) continue;
+        const k = yyyymmdd(new Date(ev.startAt));
+        if (!byDate.has(k)) byDate.set(k, []);
+        byDate.get(k).push(ev);
+      }
+
+      grid.innerHTML = '';
+      const todayKey = yyyymmdd(new Date());
+      const editable = canEdit();
+
+      for (const d of cells) {
+        const key = yyyymmdd(d);
+        const inMonth = d.getMonth() === m;
+
+        const cell = document.createElement('div');
+        cell.className = 'day-cell';
+        if (!inMonth) cell.style.opacity = '0.45';
+
+        const head = document.createElement('div');
+        head.className = 'day-head';
+        const dateSpan = document.createElement('div');
+        dateSpan.textContent = `${d.getDate()}`;
+        const todaySpan = document.createElement('div');
+        if (key === todayKey) { todaySpan.className = 'today'; todaySpan.textContent = '今日'; }
+        head.appendChild(dateSpan); head.appendChild(todaySpan);
+
+        const list = document.createElement('div');
+        list.className = 'day-events';
+
+        const dayEvents = (byDate.get(key) || []).slice().sort((a,b)=> (a.startAt||'').localeCompare(b.startAt||''));
+        for (const ev of dayEvents) {
+          const item = document.createElement('div');
+          item.className = 'day-event';
+          const st = new Date(ev.startAt);
+          const et = ev.endAt ? new Date(ev.endAt) : null;
+          const sh = String(st.getHours()).padStart(2,'0'), sm = String(st.getMinutes()).padStart(2,'0');
+          const eh = et ? String(et.getHours()).padStart(2,'0') : '--';
+          const em = et ? String(et.getMinutes()).padStart(2,'0') : '--';
+          item.textContent = `${sh}:${sm}-${eh}:${em} ${ev.place || ''}`;
+          item.setAttribute('data-id', ev.id);
+
+          if (editable) {
+            item.addEventListener('click', () => {
+              const all = loadAll(); const idx = all.findIndex(x => x.id === ev.id);
+              if (idx < 0) return; const cur = all[idx];
+
+              $('place').value = cur.place || '';
+              $('startAt').value = cur.startAt || '';
+              (function setEndTimeOnly(){
+                const et = $('endAtTime');
+                if (et) {
+                  if (cur.endAt) {
+                    const d2 = new Date(cur.endAt);
+                    const hh = String(d2.getHours()).padStart(2,'0');
+                    const mm = String(d2.getMinutes()).padStart(2,'0');
+                    et.value = `${hh}:${mm}`;
+                  } else et.value = '';
+                }
+              })();
+              $('participants').value = cur.participants || '';
+              $('contact').value = cur.contact || '';
+              $('walkins').value = cur.walkins || 'same-gender';
+
+              openModal();
+
+              createBtn.onclick = () => {
+                if (!canEdit()) { alert('編集PINが必要です'); return; }
+                const startVal = $('startAt').value;
+                const endTimeOnly = $('endAtTime').value;
+                let endVal = cur.endAt;
+                if (startVal && endTimeOnly) {
+                  const d3 = new Date(startVal);
+                  const [hh, mm] = endTimeOnly.split(':').map(Number);
+                  d3.setHours(hh || 0, mm || 0, 0, 0);
+                  const y3=d3.getFullYear(), m3=String(d3.getMonth()+1).padStart(2,'0'), day3=String(d3.getDate()).padStart(2,'0');
+                  const H3=String(d3.getHours()).padStart(2,'0'), M3=String(d3.getMinutes()).padStart(2,'0');
+                  endVal = `${y3}-${m3}-${day3}T${H3}:${M3}`;
+                }
+
+                cur.title = '';
+                cur.place = $('place').value.trim();
+                cur.startAt = startVal;
+                cur.endAt = endVal;
+                cur.participants = $('participants').value.trim();
+                cur.contact = $('contact').value.trim();
+                cur.walkins = $('walkins').value;
+
+                if (!cur.startAt || !endTimeOnly || !cur.place) { alert('開始日時／終了時刻／場所は必須です'); return; }
+                if (new Date(cur.endAt).getTime() < new Date(cur.startAt).getTime()) { alert('終了時刻は開始より後の時刻を指定してください（同日内）'); return; }
+
+                all[idx] = cur; saveAll(all);
+                createBtn.onclick = defaultCreateHandler;
+                clearForm(); closeModal(); render();
+              };
+            });
+          }
+          list.appendChild(item);
+        }
+
+        cell.appendChild(head);
+        cell.appendChild(list);
+        grid.appendChild(cell);
+      }
+
+      $('prevMonthBtn').onclick = () => { currentMonth = monthDiff(currentMonth, -1); renderMonth(); };
+      $('nextMonthBtn').onclick = () => { currentMonth = monthDiff(currentMonth, 1); renderMonth(); };
+    }
+
+    function render() {
+      if (viewMode === 'list') { renderList(); } else { renderMonth(); }
+    }
+
+    function defaultCreateHandler() {
+      if (!canEdit()) { alert('編集PIN（4桁の数字）を入力してください'); return; }
+      const ev = readForm();
+      if (!ev.startAt || !$('endAtTime').value || !ev.place) { alert('開始日時／終了時刻／場所は必須です'); return; }
+      if (new Date(ev.endAt).getTime() < new Date(ev.startAt).getTime()) { alert('終了時刻は開始より後の時刻を指定してください（同日内）'); return; }
+      const list = loadAll(); list.push(ev); saveAll(list);
+      clearForm(); render();
+    }
+    createBtn.onclick = defaultCreateHandler;
+
+    /* ===== 共有リンク・全消去 ===== */
+    document.getElementById('shareLinkBtn').addEventListener('click', async () => {
+      const url = location.origin + location.pathname + '?group=' + groupId;
+      try { await navigator.clipboard.writeText(url); alert('グループURLをコピーしました'); }
+      catch(e) { prompt('このURLを共有してください', url); }
+    });
+    document.getElementById('purgeBtn').addEventListener('click', () => {
+      if (confirm('この端末に保存された全グループの予定を削除します。よろしいですか？')) {
+        localStorage.removeItem(STORAGE_KEY); render();
+      }
+    });
+
+    /* ===== 背景アニメーション ===== */
+    function initBackground() {
+      const canvas = document.getElementById('bgCanvas');
+      const ctx = canvas.getContext('2d');
+      function resize(){ canvas.width = innerWidth; canvas.height = innerHeight; }
+      addEventListener('resize', resize, { passive:true }); resize();
+      const particles=[]; const colors=['rgba(30,64,175,0.5)','rgba(17,94,172,0.5)','rgba(31,103,216,0.5)','rgba(101,92,199,0.5)'];
+      for(let i=0;i<50;i++){
+        particles.push({ x:Math.random()*canvas.width, y:Math.random()*canvas.height, r:20+Math.random()*40, dx:-0.5+Math.random(), dy:-0.5+Math.random(), c:colors[(Math.random()*colors.length)|0] });
+      }
+      (function loop(){
+        const g = ctx.createLinearGradient(0,0,canvas.width,canvas.height); g.addColorStop(0,'#1f2937'); g.addColorStop(1,'#0f172a');
+        ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
+        particles.forEach(p=>{ p.x+=p.dx; p.y+=p.dy;
+          if(p.x<-p.r) p.x=canvas.width+p.r; if(p.x>canvas.width+p.r) p.x=-p.r;
+          if(p.y<-p.r) p.y=canvas.height+p.r; if(p.y>canvas.height+p.r) p.y=-p.r;
+          ctx.beginPath(); ctx.fillStyle=p.c; ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+        });
+        requestAnimationFrame(loop);
+      })();
+    }
+
+    /* ===== Service Worker ===== */
+    if ('serviceWorker' in navigator) {
+      addEventListener('load', () => { navigator.serviceWorker.register('/sw.js'); });
+    }
+
+    /* ===== 初期化 ===== */
+    document.getElementById('listViewBtn').addEventListener('click', () => setView('list'));
+    document.getElementById('monthViewBtn').addEventListener('click', () => setView('month'));
+
+    // 初期ビュー & 背景
+    setView(viewMode);
+    initBackground();
+  </script>
+</body>
+</html>
