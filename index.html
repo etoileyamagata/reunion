@@ -715,6 +715,34 @@
         localStorage.removeItem(STORAGE_KEY); render();
       }
     });
+async function ensurePushSubscription() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+
+    // 既存購読があればサーバへ同期だけして終了
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      await saveSubscriptionToServer(groupId, deviceId(), existing);
+      return;
+    }
+
+    // 通知許可
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return;
+
+    // 新規購読
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+
+    // サーバへ保存
+    await saveSubscriptionToServer(groupId, deviceId(), sub);
+  } catch (e) {
+    console.warn('Push subscribe failed:', e);
+  }
+}
 
     /* ===== 背景アニメーション ===== */
     function initBackground() {
@@ -738,10 +766,14 @@
       })();
     }
 
-    /* ===== Service Worker ===== */
-    if ('serviceWorker' in navigator) {
-      addEventListener('load', () => { navigator.serviceWorker.register('/sw.js'); });
-    }
+/* ===== Service Worker ===== */
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(console.warn);
+  });
+} else {
+  console.warn('SW not registered: requires HTTPS or localhost');
+}
 
     /* ===== 初期化 ===== */
     document.getElementById('listViewBtn').addEventListener('click', () => setView('list'));
@@ -750,7 +782,15 @@
     // 初期ビュー & 背景
 setView(viewMode);
 initBackground();
-ensurePushSubscription();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.ready.then(() => {
+    if (typeof ensurePushSubscription === 'function') {
+      ensurePushSubscription();
+    }
+  });
+}
+
   </script>
 </body>
 </html>
