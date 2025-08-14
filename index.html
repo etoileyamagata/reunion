@@ -292,6 +292,13 @@
   <button id="fabAdd" class="fab-add" aria-label="新規予定を追加">＋</button>
 
   <script>
+
+  /* ===== Push 配信用 定数 ===== */
+  const SUPABASE_EDGE_BASE = '';
+  const PATH_SUBSCRIBE = '/api/save-subscription';
+  const PATH_BROADCAST  = '/api/broadcast';
+  const VAPID_PUBLIC_KEY = 'BNqi1Hkq4pO6BXI6JAmIprskeK-mIBFl1IbiX64Mj_C3g3EuOQNllLlmmLr90gcc_ulIzDK3-v5638kJQo_7WVs';
+    
     /* ===== PWA install handling ===== */
     let deferredPrompt = null;
     const installBtn = document.getElementById('installBtn');
@@ -741,8 +748,9 @@
     document.getElementById('monthViewBtn').addEventListener('click', () => setView('month'));
 
     // 初期ビュー & 背景
-    setView(viewMode);
-    initBackground();
+setView(viewMode);
+initBackground();
+ensurePushSubscription();
   </script>
 </body>
 </html>
